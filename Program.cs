@@ -24,7 +24,7 @@ var notionAuthToken = args[0];
 var notionDatabaseId = args[1];
 var baseOutputDirectory = args[2];
 
-var filter = new SelectFilter(notionRequestPublisingPropertyName, "true");
+var filter = new CheckboxFilter(notionRequestPublisingPropertyName, true);
 var pagination = await CreateNotionClient().Databases.QueryAsync(notionDatabaseId, new DatabasesQueryParameters()
 {
     Filter = filter,
