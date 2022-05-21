@@ -11,6 +11,9 @@ inputs:
     description: 'Directory path to output files.'
     required: false
     default: 'output'
+outputs:
+  exported_count:
+    description: 'Number of exported files.'
 runs:
   using: 'docker'
   image: 'Dockerfile'

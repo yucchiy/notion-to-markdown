@@ -24,10 +24,14 @@ var notionAuthToken = args[0];
 var notionDatabaseId = args[1];
 var baseOutputDirectory = args[2];
 
-var pagination = await CreateNotionClient().Databases.QueryAsync(notionDatabaseId, new DatabasesQueryParameters()).ConfigureAwait(false);
-
+var filter = new SelectFilter(notionRequestPublisingPropertyName, "true");
+var pagination = await CreateNotionClient().Databases.QueryAsync(notionDatabaseId, new DatabasesQueryParameters()
+{
+    Filter = filter,
+}).ConfigureAwait(false);
 var now = DateTime.Now;
 
+var exportedCount = 0;
 do
 {
     foreach (var page in pagination.Results)
@@ -51,6 +55,8 @@ do
                     },
                 }
             }).ConfigureAwait(false);
+
+            exportedCount++;
         }
     }
 
@@ -61,9 +67,12 @@ do
 
     pagination = await CreateNotionClient().Databases.QueryAsync(notionDatabaseId, new DatabasesQueryParameters
     {
+        Filter = filter,
         StartCursor = pagination.NextCursor,
     }).ConfigureAwait(false);
 } while (true);
+
+Console.WriteLine($"::set-output name=exported_count::{exportedCount}");
 
 NotionClient CreateNotionClient()
 {
@@ -153,7 +162,7 @@ async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page
         }
     }
 
-    if (!requestPublishing && publishedDateTime.HasValue)
+    if (!requestPublishing)
     {
         Console.WriteLine($"{page.Id}(title = {title}): No request publishing.");
         return false;
@@ -161,7 +170,7 @@ async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page
 
     if (!publishedDateTime.HasValue || !lastEditedDateTime.HasValue)
     {
-        Console.WriteLine($"{page.Id}(title = {title}): Don't have publish or last edited date.");
+        Console.WriteLine($"{page.Id}(title = {title}): Skip updating becase this page don't have publish or last edited date.");
         return false;
     }
 
@@ -169,17 +178,8 @@ async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page
     {
         if (now < publishedDateTime.Value)
         {
-            Console.WriteLine($"{page.Id}(title = {title}): Skip updating because of unreached published datetime.");
+            Console.WriteLine($"{page.Id}(title = {title}): Skip updating because the publication date have not been reached");
             return false;
-        }
-
-        if (lastSystemCrawledDateTime.HasValue)
-        {
-            if (lastEditedDateTime.Value <= lastSystemCrawledDateTime.Value)
-            {
-                Console.WriteLine($"{page.Id}(title = {title}): Skip updating because this article already updated.");
-                return false;
-            }
         }
     }
 
@@ -428,14 +428,6 @@ async Task AppendBlockLineAsync(Block block, string indent, string outputDirecto
     }
 }
 
-void AppendTitleProperty(TitlePropertyValue titleProperty, StringBuilder stringBuilder)
-{
-    foreach (var richText in titleProperty.Title)
-    {
-        AppendRichText(richText, stringBuilder);
-    }
-}
-
 void AppendRichText(RichTextBase richText, StringBuilder stringBuilder)
 {
     var text = richText.PlainText;
@@ -493,6 +485,7 @@ async Task AppendImageAsync(ImageBlock imageBlock, string indent, string outputD
             var fileName = $"{Convert.ToHexString(md5.ComputeHash(input))}{Path.GetExtension(uri.LocalPath)}";
             var filePath = $"{outputDirectory}/{fileName}";
 
+            // TODO: WebClient is not recommended
             var client = new WebClient();
             await client.DownloadFileTaskAsync(uri, filePath).ConfigureAwait(false);
 
