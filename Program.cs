@@ -7,6 +7,7 @@ var notionTitlePropertyName = "Title";
 var notionTypePropertyName = "Type";
 var notionPublishedAtPropertyName = "PublishedAt";
 var notionEditedAtPropertyName = "EditedAt";
+var notionRequestPublisingPropertyName = "RequestPublishing";
 var notionCrawledAtPropertyName = "_SystemCrawledAt";
 var notionTagsPropertyName = "Tags";
 var notionDescriptionPropertyName = "Description";
@@ -19,19 +20,38 @@ var frontMatterDescriptionName = "description";
 var frontMatterTagsName = "tags";
 
 // from CLI
-var baseOutputDirectory = args[0];
+var notionAuthToken = args[0];
+var notionDatabaseId = args[1];
+var baseOutputDirectory = args[2];
 
-var databaseId = Environment.GetEnvironmentVariable("NOTION_DATABASE_ID");
+var pagination = await CreateNotionClient().Databases.QueryAsync(notionDatabaseId, new DatabasesQueryParameters()).ConfigureAwait(false);
 
-var pagination = await CreateNotionClient().Databases.QueryAsync(databaseId, new DatabasesQueryParameters()).ConfigureAwait(false);
-
-var now = DateTime.UtcNow;
+var now = DateTime.Now;
 
 do
 {
     foreach (var page in pagination.Results)
     {
-        await ExportPageToMarkdownAsync(baseOutputDirectory, page, now);
+        if (await ExportPageToMarkdownAsync(baseOutputDirectory, page, now))
+        {
+            await CreateNotionClient().Pages.UpdateAsync(page.Id, new PagesUpdateParameters()
+            {
+                Properties = new Dictionary<string, PropertyValue>()
+                {
+                    [notionCrawledAtPropertyName] = new DatePropertyValue()
+                    {
+                        Date = new Date()
+                        {
+                            Start = now,
+                        }
+                    },
+                    [notionRequestPublisingPropertyName] = new CheckboxPropertyValue()
+                    {
+                        Checkbox = false,
+                    },
+                }
+            }).ConfigureAwait(false);
+        }
     }
 
     if (!pagination.HasMore)
@@ -39,23 +59,23 @@ do
         break;
     }
 
-    pagination = await CreateNotionClient().Databases.QueryAsync(databaseId, new DatabasesQueryParameters
+    pagination = await CreateNotionClient().Databases.QueryAsync(notionDatabaseId, new DatabasesQueryParameters
     {
         StartCursor = pagination.NextCursor,
     }).ConfigureAwait(false);
 } while (true);
 
-
 NotionClient CreateNotionClient()
 {
     return NotionClientFactory.Create(new ClientOptions
     {
-        AuthToken = Environment.GetEnvironmentVariable("NOTION_AUTH_TOKEN"),
+        AuthToken = notionAuthToken,
     });
 }
 
-async Task ExportPageToMarkdownAsync(string baseOutputDirectory, Page page, DateTime now, bool forceExport = false)
+async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page, DateTime now, bool forceExport = false)
 {
+    bool requestPublishing = false;
     string title = string.Empty;
     string type = string.Empty;
     string slug = page.Id;
@@ -124,28 +144,41 @@ async Task ExportPageToMarkdownAsync(string baseOutputDirectory, Page page, Date
                 type = parsedType;
             }
         }
+        else if (property.Key == notionRequestPublisingPropertyName)
+        {
+            if (TryParsePropertyValueAsBoolean(property.Value, out var parsedBoolean))
+            {
+                requestPublishing = parsedBoolean;
+            }
+        }
+    }
+
+    if (!requestPublishing && publishedDateTime.HasValue)
+    {
+        Console.WriteLine($"{page.Id}(title = {title}): No request publishing.");
+        return false;
     }
 
     if (!publishedDateTime.HasValue || !lastEditedDateTime.HasValue)
     {
-        Console.WriteLine($"{page.Id}(title = {title}) don't have publish or last edited date.");
-        return;
+        Console.WriteLine($"{page.Id}(title = {title}): Don't have publish or last edited date.");
+        return false;
     }
 
     if (!forceExport)
     {
         if (now < publishedDateTime.Value)
         {
-            Console.WriteLine($"Skip {page.Id}(title = {title}) because of unreached published datetime.");
-            return;
+            Console.WriteLine($"{page.Id}(title = {title}): Skip updating because of unreached published datetime.");
+            return false;
         }
 
         if (lastSystemCrawledDateTime.HasValue)
         {
-            if (lastEditedDateTime.Value < lastSystemCrawledDateTime.Value)
+            if (lastEditedDateTime.Value <= lastSystemCrawledDateTime.Value)
             {
-                Console.WriteLine($"Skip {page.Id}(title = {title}) because this article already updated.");
-                return;
+                Console.WriteLine($"{page.Id}(title = {title}): Skip updating because this article already updated.");
+                return false;
             }
         }
     }
@@ -204,6 +237,8 @@ async Task ExportPageToMarkdownAsync(string baseOutputDirectory, Page page, Date
             await streamWriter.WriteAsync(stringBuilder.ToString()).ConfigureAwait(false);
         }
     }
+
+    return true;
 }
 
 string BuildOutputDirectory(string baseDirectoryPath, DateTime publishedDate)
@@ -293,6 +328,21 @@ bool TryParsePropertyValueAsStringSet(PropertyValue value, out List<string> set)
             {
                 set.Add(selectValue.Name);
             }
+            break;
+        default:
+            return false;
+    }
+
+    return true;
+}
+
+bool TryParsePropertyValueAsBoolean(PropertyValue value, out bool boolean)
+{
+    boolean = false;
+    switch (value)
+    {
+        case CheckboxPropertyValue checkboxProperty:
+            boolean = checkboxProperty.Checkbox;
             break;
         default:
             return false;
