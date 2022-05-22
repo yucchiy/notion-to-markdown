@@ -36,9 +36,7 @@ do
     foreach (var page in pagination.Results)
     {
         if (await ExportPageToMarkdownAsync(page, now))
-        // if (await ExportPageToMarkdownAsync(page, now, true))
         {
-            continue;
             await CreateNotionClient().Pages.UpdateAsync(page.Id, new PagesUpdateParameters()
             {
                 Properties = new Dictionary<string, PropertyValue>()
