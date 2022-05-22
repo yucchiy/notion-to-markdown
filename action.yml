@@ -21,3 +21,7 @@ runs:
     - ${{ inputs.notion_auth_token }}
     - ${{ inputs.notion_database_id }}
     - ${{ inputs.output_directory_path_template }}
+branding:
+  color: orange
+  icon: download-cloud
+  
