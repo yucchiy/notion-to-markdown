@@ -6,7 +6,6 @@ using System.Text;
 var notionTitlePropertyName = "Title";
 var notionTypePropertyName = "Type";
 var notionPublishedAtPropertyName = "PublishedAt";
-var notionEditedAtPropertyName = "EditedAt";
 var notionRequestPublisingPropertyName = "RequestPublishing";
 var notionCrawledAtPropertyName = "_SystemCrawledAt";
 var notionTagsPropertyName = "Tags";
@@ -22,7 +21,7 @@ var frontMatterTagsName = "tags";
 // from CLI
 var notionAuthToken = args[0];
 var notionDatabaseId = args[1];
-var baseOutputDirectory = args[2];
+var outputDirectoryPathTemplate = args[2];
 
 var filter = new CheckboxFilter(notionRequestPublisingPropertyName, true);
 var pagination = await CreateNotionClient().Databases.QueryAsync(notionDatabaseId, new DatabasesQueryParameters()
@@ -36,8 +35,10 @@ do
 {
     foreach (var page in pagination.Results)
     {
-        if (await ExportPageToMarkdownAsync(baseOutputDirectory, page, now))
+        if (await ExportPageToMarkdownAsync(page, now))
+        // if (await ExportPageToMarkdownAsync(page, now, true))
         {
+            continue;
             await CreateNotionClient().Pages.UpdateAsync(page.Id, new PagesUpdateParameters()
             {
                 Properties = new Dictionary<string, PropertyValue>()
@@ -82,7 +83,7 @@ NotionClient CreateNotionClient()
     });
 }
 
-async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page, DateTime now, bool forceExport = false)
+async Task<bool> ExportPageToMarkdownAsync(Page page, DateTime now, bool forceExport = false)
 {
     bool requestPublishing = false;
     string title = string.Empty;
@@ -91,7 +92,6 @@ async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page
     string description = string.Empty;
     List<string>? tags = null;
     DateTime? publishedDateTime = null;
-    DateTime? lastEditedDateTime = null;
     DateTime? lastSystemCrawledDateTime = null;
 
     // build frontmatter
@@ -109,13 +109,6 @@ async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page
             if (TryParsePropertyValueAsDateTime(property.Value, out var parsedCrawledAt))
             {
                 lastSystemCrawledDateTime = parsedCrawledAt;
-            }
-        }
-        else if (property.Key == notionEditedAtPropertyName)
-        {
-            if (TryParsePropertyValueAsDateTime(property.Value, out var parsedEditedAt))
-            {
-                lastEditedDateTime = parsedEditedAt;
             }
         }
         else if (property.Key == notionSlugPropertyName)
@@ -168,9 +161,9 @@ async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page
         return false;
     }
 
-    if (!publishedDateTime.HasValue || !lastEditedDateTime.HasValue)
+    if (!publishedDateTime.HasValue)
     {
-        Console.WriteLine($"{page.Id}(title = {title}): Skip updating becase this page don't have publish or last edited date.");
+        Console.WriteLine($"{page.Id}(title = {title}): Skip updating becase this page don't have publish ate.");
         return false;
     }
 
@@ -198,12 +191,7 @@ async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page
     stringBuilder.AppendLine("---");
     stringBuilder.AppendLine("");
 
-    var outputDirectory = BuildOutputDirectory(baseOutputDirectory, publishedDateTime.Value);
-    if (!string.IsNullOrEmpty(slug))
-    {
-        outputDirectory = $"{outputDirectory}/{slug}";
-    }
-
+    var outputDirectory = BuildOutputDirectory(publishedDateTime.Value, title, slug);
     if (!Directory.Exists(outputDirectory))
     {
         Directory.CreateDirectory(outputDirectory);
@@ -229,7 +217,6 @@ async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page
         }).ConfigureAwait(false);
     } while (true);
 
-
     using (var fileStream = File.OpenWrite($"{outputDirectory}/index.markdown"))
     {
         using (var streamWriter = new StreamWriter(fileStream))
@@ -241,9 +228,15 @@ async Task<bool> ExportPageToMarkdownAsync(string baseOutputDirectory, Page page
     return true;
 }
 
-string BuildOutputDirectory(string baseDirectoryPath, DateTime publishedDate)
+string BuildOutputDirectory(DateTime publishedDate, string title, string slug)
 {
-    return $"{baseDirectoryPath}/{publishedDate.ToString("yyyy")}/{publishedDate.ToString("MM")}";
+    var template = Scriban.Template.Parse(outputDirectoryPathTemplate);
+    return template.Render(new
+    {
+        publish = publishedDate,
+        title = title,
+        slug = slug,
+    });
 }
 
 bool TryParsePropertyValueAsDateTime(PropertyValue value, out DateTime dateTime)

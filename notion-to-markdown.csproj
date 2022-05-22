@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Notion.Net" Version="2.2.3" />
+    <PackageReference Include="Scriban" Version="5.4.5" />
   </ItemGroup>
 
 </Project>

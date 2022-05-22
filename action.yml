@@ -1,23 +1,23 @@
-name: 'notion-to-markdown'
-description: 'Custom action to export Notion database to local markdown files.'
+name: notion-to-markdown
+description: Custom action to export Notion database to local markdown files.
 inputs:
   notion_auth_token:
-    description: 'Auth token of the notion.'
+    description: Auth token of the notion.
     required: true
   notion_database_id:
-    description: 'ID of the notion database to be exported.'
+    description: ID of the notion database to be exported.
     required: true
-  output_directory_path:
-    description: 'Directory path to output files.'
+  output_directory_path_template:
+    description: Directory path template to output files.
     required: false
-    default: 'output'
+    default: output/{{publish|date.to_string('%Y/%m')}}/{{slug}}
 outputs:
   exported_count:
-    description: 'Number of exported files.'
+    description: Number of exported files.
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
+  using: docker
+  image: Dockerfile
   args:
     - ${{ inputs.notion_auth_token }}
     - ${{ inputs.notion_database_id }}
-    - ${{ inputs.output_directory_path }}
+    - ${{ inputs.output_directory_path_template }}
