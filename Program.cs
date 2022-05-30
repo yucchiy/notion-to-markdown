@@ -18,6 +18,11 @@ var frontMatterPublishedName = "date";
 var frontMatterDescriptionName = "description";
 var frontMatterTagsName = "tags";
 
+if (args.Length != 3)
+{
+    throw new ArgumentException("args length should be three.");
+}
+
 // from CLI
 var notionAuthToken = args[0];
 var notionDatabaseId = args[1];
@@ -27,7 +32,7 @@ var filter = new CheckboxFilter(notionRequestPublisingPropertyName, true);
 var pagination = await CreateNotionClient().Databases.QueryAsync(notionDatabaseId, new DatabasesQueryParameters()
 {
     Filter = filter,
-}).ConfigureAwait(false);
+});
 var now = DateTime.Now;
 
 var exportedCount = 0;
@@ -53,7 +58,7 @@ do
                         Checkbox = false,
                     },
                 }
-            }).ConfigureAwait(false);
+            });
 
             exportedCount++;
         }
@@ -68,7 +73,7 @@ do
     {
         Filter = filter,
         StartCursor = pagination.NextCursor,
-    }).ConfigureAwait(false);
+    });
 } while (true);
 
 Console.WriteLine($"::set-output name=exported_count::{exportedCount}");
@@ -196,12 +201,12 @@ async Task<bool> ExportPageToMarkdownAsync(Page page, DateTime now, bool forceEx
     }
 
     // page content
-    var pagination = await CreateNotionClient().Blocks.RetrieveChildrenAsync(page.Id).ConfigureAwait(false);
+    var pagination = await CreateNotionClient().Blocks.RetrieveChildrenAsync(page.Id);
     do
     {
         foreach (Block block in pagination.Results)
         {
-            await AppendBlockLineAsync(block, string.Empty, outputDirectory, stringBuilder).ConfigureAwait(false);
+            await AppendBlockLineAsync(block, string.Empty, outputDirectory, stringBuilder);
         }
 
         if (!pagination.HasMore)
@@ -212,14 +217,14 @@ async Task<bool> ExportPageToMarkdownAsync(Page page, DateTime now, bool forceEx
         pagination = await CreateNotionClient().Blocks.RetrieveChildrenAsync(page.Id, new BlocksRetrieveChildrenParameters
         {
             StartCursor = pagination.NextCursor,
-        }).ConfigureAwait(false);
+        });
     } while (true);
 
     using (var fileStream = File.OpenWrite($"{outputDirectory}/index.markdown"))
     {
-        using (var streamWriter = new StreamWriter(fileStream))
+        using (var streamWriter = new StreamWriter(fileStream, Encoding.UTF8))
         {
-            await streamWriter.WriteAsync(stringBuilder.ToString()).ConfigureAwait(false);
+            await streamWriter.WriteAsync(stringBuilder.ToString());
         }
     }
 
@@ -379,7 +384,7 @@ async Task AppendBlockLineAsync(Block block, string indent, string outputDirecto
             stringBuilder.AppendLine(string.Empty);
             break;
         case ImageBlock imageBlock:
-            await AppendImageAsync(imageBlock, indent, outputDirectory, stringBuilder).ConfigureAwait(false);
+            await AppendImageAsync(imageBlock, indent, outputDirectory, stringBuilder);
             stringBuilder.AppendLine(string.Empty);
             break;
         case CodeBlock codeBlock:
@@ -398,12 +403,12 @@ async Task AppendBlockLineAsync(Block block, string indent, string outputDirecto
 
     if (block.HasChildren)
     {
-        var pagination = await CreateNotionClient().Blocks.RetrieveChildrenAsync(block.Id).ConfigureAwait(false);
+        var pagination = await CreateNotionClient().Blocks.RetrieveChildrenAsync(block.Id);
         do
         {
             foreach (Block childBlock in pagination.Results)
             {
-                await AppendBlockLineAsync(childBlock, $"    {indent}", outputDirectory, stringBuilder).ConfigureAwait(false);
+                await AppendBlockLineAsync(childBlock, $"    {indent}", outputDirectory, stringBuilder);
             }
 
             if (!pagination.HasMore)
@@ -414,7 +419,7 @@ async Task AppendBlockLineAsync(Block block, string indent, string outputDirecto
             pagination = await CreateNotionClient().Blocks.RetrieveChildrenAsync(block.Id, new BlocksRetrieveChildrenParameters
             {
                 StartCursor = pagination.NextCursor,
-            }).ConfigureAwait(false);
+            });
         } while (true);
     }
 }
@@ -478,7 +483,7 @@ async Task AppendImageAsync(ImageBlock imageBlock, string indent, string outputD
 
             // TODO: WebClient is not recommended
             var client = new WebClient();
-            await client.DownloadFileTaskAsync(uri, filePath).ConfigureAwait(false);
+            await client.DownloadFileTaskAsync(uri, filePath);
 
             stringBuilder.Append($"{indent}![](./{fileName})");
         }
