@@ -17,6 +17,7 @@ var frontMatterTypeName = "type";
 var frontMatterPublishedName = "date";
 var frontMatterDescriptionName = "description";
 var frontMatterTagsName = "tags";
+var frontMatterEyecatch = "eyecatch";
 
 if (args.Length != 3)
 {
@@ -42,6 +43,7 @@ do
     {
         if (await ExportPageToMarkdownAsync(page, now))
         {
+            continue;
             await CreateNotionClient().Pages.UpdateAsync(page.Id, new PagesUpdateParameters()
             {
                 Properties = new Dictionary<string, PropertyValue>()
@@ -180,6 +182,11 @@ async Task<bool> ExportPageToMarkdownAsync(Page page, DateTime now, bool forceEx
     }
 
     slug = string.IsNullOrEmpty(slug) ? page.Id : slug;
+    var outputDirectory = BuildOutputDirectory(publishedDateTime.Value, title, slug);
+    if (!Directory.Exists(outputDirectory))
+    {
+        Directory.CreateDirectory(outputDirectory);
+    }
 
     var stringBuilder = new StringBuilder();
     stringBuilder.AppendLine("---");
@@ -189,16 +196,16 @@ async Task<bool> ExportPageToMarkdownAsync(Page page, DateTime now, bool forceEx
     if (!string.IsNullOrWhiteSpace(description)) stringBuilder.AppendLine($"{frontMatterDescriptionName}: \"{description}\"");
     if (tags != null) stringBuilder.AppendLine($"{frontMatterTagsName}: [{string.Join(',', tags)}]");
     stringBuilder.AppendLine($"{frontMatterPublishedName}: \"{publishedDateTime.Value.ToString("s")}\"");
+    if (page.Cover != null && page.Cover is UploadedFile uploadedFile)
+    {
+        var (fileName, _) = await DownloadImage(uploadedFile.File.Url, outputDirectory);
+        stringBuilder.AppendLine($"{frontMatterEyecatch}: \"./{fileName}\"");
+    }
 
     stringBuilder.AppendLine("");
     stringBuilder.AppendLine("---");
     stringBuilder.AppendLine("");
 
-    var outputDirectory = BuildOutputDirectory(publishedDateTime.Value, title, slug);
-    if (!Directory.Exists(outputDirectory))
-    {
-        Directory.CreateDirectory(outputDirectory);
-    }
 
     // page content
     var pagination = await CreateNotionClient().Blocks.RetrieveChildrenAsync(page.Id);
@@ -474,19 +481,25 @@ async Task AppendImageAsync(ImageBlock imageBlock, string indent, string outputD
 
     if (!string.IsNullOrEmpty(url))
     {
-        var uri = new Uri(url);
-        using (var md5 = MD5.Create())
-        {
-            var input = Encoding.UTF8.GetBytes(uri.LocalPath);
-            var fileName = $"{Convert.ToHexString(md5.ComputeHash(input))}{Path.GetExtension(uri.LocalPath)}";
-            var filePath = $"{outputDirectory}/{fileName}";
+        var (fileName, _) = await DownloadImage(url, outputDirectory);
+        stringBuilder.Append($"{indent}![](./{fileName})");
+    }
+}
 
-            // TODO: WebClient is not recommended
-            var client = new WebClient();
-            await client.DownloadFileTaskAsync(uri, filePath);
+async Task<(string, string)> DownloadImage(string url, string outputDirectory)
+{
+    var uri = new Uri(url);
+    using (var md5 = MD5.Create())
+    {
+        var input = Encoding.UTF8.GetBytes(uri.LocalPath);
+        var fileName = $"{Convert.ToHexString(md5.ComputeHash(input))}{Path.GetExtension(uri.LocalPath)}";
+        var filePath = $"{outputDirectory}/{fileName}";
 
-            stringBuilder.Append($"{indent}![](./{fileName})");
-        }
+        // TODO: WebClient is not recommended
+        var client = new WebClient();
+        await client.DownloadFileTaskAsync(uri, filePath);
+
+        return (fileName, filePath);
     }
 }
 
