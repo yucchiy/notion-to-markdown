@@ -43,7 +43,6 @@ do
     {
         if (await ExportPageToMarkdownAsync(page, now))
         {
-            continue;
             await CreateNotionClient().Pages.UpdateAsync(page.Id, new PagesUpdateParameters()
             {
                 Properties = new Dictionary<string, PropertyValue>()
