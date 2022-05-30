@@ -39,11 +39,11 @@ jobs:
 
 ### Inputs
 
-| Name                             | Value  | Default                                               | Description                                        |
-| -------------------------------- | ------ | ----------------------------------------------------- | -------------------------------------------------- |
-| `notion_database_id`             | string | (required)                                            | Target Notion Database Id.                         | 
-| `notion_auth_token`              | string | (required)                                            | Notion Token for accessing to your notion.         |
-| `output_directory_path_template` | string | `output/{{publish|date.to_string('%Y/%m')}}/{{slug}}` | Directory path template for export markdown files. |
+| Name                             | Value  | Default                                                | Description                                        |
+| -------------------------------- | ------ | ------------------------------------------------------ | -------------------------------------------------- |
+| `notion_database_id`             | string | (required)                                             | Target Notion Database Id.                         | 
+| `notion_auth_token`              | string | (required)                                             | Notion Token for accessing to your notion.         |
+| `output_directory_path_template` | string | `output/{{publish\|date.to_string('%Y/%m')}}/{{slug}}` | Directory path template for export markdown files. |
 
 `output_directory_path_template` is used as a scriban template string. For detail of this template string, see [this page](https://github.com/scriban/scriban/blob/master/doc/language.md).
 
