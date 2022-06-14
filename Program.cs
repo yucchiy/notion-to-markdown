@@ -228,7 +228,7 @@ async Task<bool> ExportPageToMarkdownAsync(Page page, DateTime now, bool forceEx
 
     using (var fileStream = File.OpenWrite($"{outputDirectory}/index.markdown"))
     {
-        using (var streamWriter = new StreamWriter(fileStream, Encoding.UTF8))
+        using (var streamWriter = new StreamWriter(fileStream, new UTF8Encoding(false)))
         {
             await streamWriter.WriteAsync(stringBuilder.ToString());
         }
